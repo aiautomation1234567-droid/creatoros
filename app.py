@@ -4,7 +4,6 @@ import google.generativeai as genai
 import json
 import os
 from datetime import datetime
-import io
 
 st.set_page_config(page_title="CreatorOS Pro", page_icon="🎬", layout="wide")
 
@@ -13,230 +12,165 @@ HISTORY_FILE = "creator_history.json"
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
+            import json as js
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                return js.load(f)
         except: return []
     return []
 
-def save_history(history):
+def save_history(h):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+        json.dump(h, f, ensure_ascii=False, indent=2)
 
-st.markdown("""
-<style>
+st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 h1 { font-weight: 800; letter-spacing: -0.03em; }
 .stButton>button { border-radius: 12px; font-weight: 700; padding: 0.7rem 1.4rem; }
-[data-testid="stMetricValue"] { font-weight: 800; }
-.stTextInput>div>div>input, .stSelectbox>div>div { border-radius: 10px; }
-</style>
-""", unsafe_allow_html=True)
+</style>""", unsafe_allow_html=True)
 
 st.title("🎬 CreatorOS Pro — War Edition")
-st.caption("V8.4 WAR • Permanent History • Deploy Ready • Universal Niche • Any topic")
+st.caption("V8.6 AUTO • Auto-Model • Never 404 • Permanent History • Universal Niche")
 
-ALL_LANGUAGES = ['English','Hindi','Hinglish (Hindi + English Mix)','Bengali','Tamil','Telugu','Marathi','Gujarati','Bhojpuri','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Spanish','French','German','Portuguese','Russian','Japanese','Korean','Chinese (Mandarin)','Arabic','Italian','Dutch','Turkish','Polish','Vietnamese','Thai','Indonesian','Malay','Filipino (Tagalog)','Swahili','Greek','Hebrew','Persian (Farsi)','Nepali','Sinhala','Burmese','English (US)','English (UK)']
-
+ALL_LANGUAGES = ['English','Hindi','Hinglish (Hindi + English Mix)','Bengali','Tamil','Telugu','Marathi','Gujarati','Bhojpuri','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Spanish','French','German','Portuguese','Russian','Japanese','Korean','Chinese (Mandarin)','Arabic','Italian','Dutch','Turkish','Polish','Vietnamese','Thai','Indonesian']
 NICHES = ["Any Topic (Auto-Detect)","Money & Finance","Business & Startup","Motivation & Self-Help","Education & Explainers","Tech & AI","Health & Fitness","Relationship & Lifestyle","Gaming","Comedy & Roast","Documentary & Biography","News & Commentary","Spirituality","Food & Cooking","Travel & Vlog"]
 
 if 'mem_history' not in st.session_state:
     st.session_state['mem_history'] = load_history()
-else:
-    if not st.session_state['mem_history']:
-        st.session_state['mem_history'] = load_history()
 
 with st.sidebar:
-    st.markdown("### 🎬 CreatorOS Pro V8.4")
-    st.caption("WAR EDITION — Permanent + Deploy")
+    st.markdown("### 🎬 CreatorOS Pro V8.6 AUTO")
     api_key = st.text_input("🔑 Gemini API Key:", type="password", placeholder="Paste key here...")
     if not api_key:
         try:
             api_key = st.secrets.get("GEMINI_API_KEY", "")
-            if api_key:
-                st.success("Using key from secrets")
-        except:
-            pass
+            if api_key: st.success("Using key from secrets")
+        except: pass
     if api_key:
         genai.configure(api_key=api_key)
     st.divider()
-    st.markdown("#### ⚙️ Niche Mode")
-    selected_niche = st.selectbox("Select niche:", NICHES, index=0)
+    selected_niche = st.selectbox("Niche:", NICHES, index=0)
     st.divider()
-    st.markdown("#### 📜 Permanent History")
+    st.markdown("#### 📜 History")
     if not st.session_state['mem_history']:
         st.caption("No history yet")
     else:
-        st.caption(f"{len(st.session_state['mem_history'])} saved")
-        for idx, item in enumerate(reversed(st.session_state['mem_history'][-15:])):
-            real_idx = len(st.session_state['mem_history'])-1 - idx
-            if st.button(f"{item['topic'][:20]}... ({item.get('lang','')})", key=f"hist_{real_idx}", use_container_width=True):
-                st.session_state['mem_titles_list'] = item['titles_list']
-                st.session_state['mem_script'] = item['script']
-                st.session_state['mem_topic'] = item['topic']
-                st.session_state['mem_lang'] = item['lang']
-                st.session_state['mem_seo'] = item.get('seo','')
-                st.session_state['mem_edit'] = item.get('edit','')
-                st.session_state['mem_thumb_prompt'] = item.get('thumb_prompt','')
-                st.session_state['mem_stock_timeline'] = item.get('stock_timeline',[])
-                st.session_state['mem_stock_pack'] = item.get('stock_pack',{})
-                st.session_state['mem_duration'] = item.get('duration','10 min')
-                st.session_state['mem_niche'] = item.get('niche','Any')
+        for idx, item in enumerate(reversed(st.session_state['mem_history'][-10:])):
+            real_idx = len(st.session_state['mem_history'])-1-idx
+            if st.button(f"{item['topic'][:20]}...", key=f"h_{real_idx}", use_container_width=True):
+                st.session_state['mem_titles_list']=item['titles_list']
+                st.session_state['mem_script']=item['script']
+                st.session_state['mem_topic']=item['topic']
+                st.session_state['mem_lang']=item['lang']
                 st.rerun()
-    if st.button("Clear History", use_container_width=True):
-        st.session_state['mem_history']=[]
-        save_history([])
-        if os.path.exists(HISTORY_FILE):
-            os.remove(HISTORY_FILE)
-        st.rerun()
 
+# V8.6 AUTO-MODEL: Lists models from API and auto-picks working one — never 404 again
 def gemini_json(prompt):
+    # Step 1: Try to get list of available models dynamically
+    available_models = []
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction="You output ONLY valid JSON.")
-        resp = model.generate_content(prompt, generation_config={"temperature": 0.8, "max_output_tokens": 3000})
-        txt = resp.text.strip()
-        if "```" in txt:
-            parts = txt.split("```")
-            for part in parts:
-                if "{" in part:
-                    txt = part
-                    if txt.strip().startswith("json"): txt = txt.strip()[4:]
-                    break
-        return json.loads(txt)
-    except Exception as e:
-        model = genai.GenerativeModel("gemini-pro", system_instruction="You output ONLY valid JSON.")
-        resp = model.generate_content(prompt)
-        txt = resp.text.strip()
-        if "```" in txt:
-            parts = txt.split("```")
-            for part in parts:
-                if "{" in part:
-                    txt = part
-                    if txt.strip().startswith("json"): txt = txt.strip()[4:]
-                    break
-        return json.loads(txt)
+        for m in genai.list_models():
+            # Only models that support generateContent
+            if 'generateContent' in m.supported_generation_methods:
+                # Extract short name like "gemini-2.0-flash"
+                name = m.name.replace("models/", "")
+                available_models.append(name)
+    except:
+        pass
 
-for k in ['mem_titles','mem_script','mem_topic','mem_lang','mem_seo','mem_edit','mem_titles_list','mem_thumb_prompt','mem_stock_timeline','mem_stock_pack','mem_duration','mem_niche']:
-    if k not in st.session_state: 
-        if k in ['mem_titles_list','mem_stock_timeline']: st.session_state[k]=[]
-        elif k=='mem_stock_pack': st.session_state[k]={}
-        else: st.session_state[k]=""
+    # Preferred order — newest first
+    preferred = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-pro"]
 
-tab1, tab2, tab3, tab4 = st.tabs(["🎬 IDEATION", "🖼️ SEO + THUMBNAIL", "✂️ EDIT LAB", "🚀 DEPLOY"])
+    # Build final try list: available models that match preferred, plus fallback to preferred
+    models_to_try = []
+    for p in preferred:
+        if p in available_models:
+            models_to_try.append(p)
+    # If list_models failed or empty, use preferred directly
+    if not models_to_try:
+        models_to_try = preferred
+    else:
+        # Also add any other available gemini models not in preferred list
+        for am in available_models:
+            if am not in models_to_try and "gemini" in am:
+                models_to_try.append(am)
+
+    last_err = None
+    for mname in models_to_try:
+        try:
+            model = genai.GenerativeModel(mname, system_instruction="You output ONLY valid JSON. No markdown, no explanation.")
+            resp = model.generate_content(prompt, generation_config={"temperature": 0.8, "max_output_tokens": 3000})
+            txt = resp.text.strip()
+            if "```" in txt:
+                parts = txt.split("```")
+                for part in parts:
+                    if "{" in part:
+                        txt = part
+                        if txt.strip().startswith("json"): txt = txt.strip()[4:]
+                        break
+            result = json.loads(txt)
+            # Show which model worked (in sidebar logs)
+            print(f"✅ Working model: {mname}")
+            return result
+        except Exception as e:
+            last_err = e
+            # If 404, try next model automatically
+            if "404" in str(e) or "not found" in str(e).lower():
+                continue
+            # For other errors, also try next but keep error
+            continue
+    raise Exception(f"All models failed. Last error: {last_err}. Available models found: {available_models}")
+
+for k in ['mem_titles_list','mem_script','mem_topic','mem_lang','mem_seo']:
+    if k not in st.session_state:
+        st.session_state[k]=[] if k=='mem_titles_list' else ""
+
+tab1, tab2 = st.tabs(["🎬 IDEATION", "🖼️ SEO"])
 
 with tab1:
-    topic_input = st.text_input("Topic:", placeholder="e.g. what is the history of biryani", value=st.session_state['mem_topic'], label_visibility="collapsed")
+    topic_input = st.text_input("Topic:", placeholder="e.g. how to make chicken biryani at home", value=st.session_state['mem_topic'])
     c1,c2,c3 = st.columns(3)
     with c1:
-        video_type = st.radio("Format:", ["Long Form", "Short Form"], horizontal=True, key="vt_v8")
-        if video_type=="Long Form":
-            duration = st.select_slider("Duration:", options=["5 min","8 min","10 min","12 min","15 min","20 min","30 min","45 min","60 min"], value="10 min", key="dur_long")
-        else:
-            duration = st.select_slider("Duration:", options=["15 sec","30 sec","45 sec","60 sec","90 sec"], value="60 sec", key="dur_short")
+        vt = st.radio("Format:", ["Long Form","Short Form"], horizontal=True)
+        duration = st.select_slider("Duration:", ["5 min","10 min","20 min"] if vt=="Long Form" else ["15 sec","30 sec","60 sec"], value="10 min" if vt=="Long Form" else "60 sec")
     with c2:
-        tone = st.selectbox("Tone:", ["Motivational","Energetic & Casual","Calm & Storytelling","Funny / Roast","Documentary Style","Educational","Controversial / Bold","Cinematic"], key="tone_v8")
+        tone = st.selectbox("Tone:", ["Motivational","Energetic & Casual","Calm & Storytelling","Funny / Roast","Documentary Style","Educational","Cinematic"])
     with c3:
-        language = st.selectbox(f"Language ({len(ALL_LANGUAGES)}):", ALL_LANGUAGES, key="lang_v8")
-    niche_prompt = selected_niche if selected_niche!="Any Topic (Auto-Detect)" else "auto-detect niche from topic"
+        language = st.selectbox("Language:", ALL_LANGUAGES)
+    niche_prompt = selected_niche if selected_niche!="Any Topic (Auto-Detect)" else "auto-detect"
     if st.button("✨ Generate with Gemini", type="primary", use_container_width=True):
-        if not api_key:
-            st.error("Paste Gemini API Key in sidebar first")
-        elif not topic_input.strip():
-            st.warning("Drop a topic first")
+        if not api_key: st.error("Add Gemini API key in sidebar")
+        elif not topic_input.strip(): st.warning("Enter topic")
         else:
-            with st.spinner(f"Generating {duration}..."):
+            with st.spinner("Generating..."):
                 try:
-                    word_map = {"15 sec": "40", "30 sec": "80", "45 sec": "110", "60 sec": "130", "90 sec": "200", "5 min": "700", "8 min": "1100", "10 min": "1400", "12 min": "1700", "15 min": "2100", "20 min": "2800", "30 min": "4200", "45 min": "6300", "60 min": "8400"}
-                    word_target = word_map.get(duration, "1400")
-                    title_prompt = "Topic: " + topic_input + " Niche: " + niche_prompt + " Language: " + language + " Return ONLY JSON like {\"titles\": [\"t1\",\"t2\"]} Generate 10 viral titles in " + language
-                    data_titles = gemini_json(title_prompt)
-                    titles_list = data_titles.get("titles", [])
-                    script_prompt = "Topic: " + topic_input + " Niche: " + niche_prompt + " Length: " + duration + " (" + word_target + " words) Tone: " + tone + " Language: " + language + " Return ONLY JSON like {\"script\": \"full voiceover\"} Write " + word_target + " words script in " + language
-                    data_script = gemini_json(script_prompt)
-                    script_text = data_script.get("script", "")
-                    st.session_state['mem_titles_list']=titles_list
-                    st.session_state['mem_script']=script_text
+                    wm = {"15 sec":"40","30 sec":"80","60 sec":"130","5 min":"700","10 min":"1400","20 min":"2800"}
+                    wt = wm.get(duration,"1400")
+                    dt = gemini_json(f"Topic:{topic_input} Niche:{niche_prompt} Lang:{language} Return ONLY JSON like {{\"titles\":[\"t1\"]}} Generate 10 viral titles in {language}")
+                    titles = dt.get("titles",[])
+                    ds = gemini_json(f"Topic:{topic_input} Niche:{niche_prompt} Length:{duration} ({wt} words) Tone:{tone} Lang:{language} Return ONLY JSON like {{\"script\":\"text\"}} Write {wt} words voiceover script in {language} with Hook, Main, Outro.")
+                    script = ds.get("script","")
+                    st.session_state['mem_titles_list']=titles
+                    st.session_state['mem_script']=script
                     st.session_state['mem_topic']=topic_input
                     st.session_state['mem_lang']=language
-                    st.session_state['mem_duration']=duration
-                    st.session_state['mem_niche']=niche_prompt
-                    new_item = {"topic": topic_input, "lang": language, "titles_list": titles_list, "script": script_text, "duration": duration, "tone": tone, "niche": niche_prompt, "timestamp": datetime.now().strftime("%d %b %H:%M %Y"), "seo": "", "edit": "", "thumb_prompt": "", "stock_pack": {}, "stock_timeline": []}
-                    st.session_state['mem_history'].append(new_item)
+                    st.session_state['mem_history'].append({"topic":topic_input,"lang":language,"titles_list":titles,"script":script,"timestamp":datetime.now().strftime("%d %b %H:%M")})
                     save_history(st.session_state['mem_history'])
-                    st.success(f"Generated + Saved! Total: {len(st.session_state['mem_history'])}")
+                    st.success("Done!")
                 except Exception as e:
                     st.error(f"Error: {e}")
     if st.session_state['mem_titles_list']:
-        st.divider()
-        st.subheader(f"📌 10 Titles — {st.session_state['mem_topic'][:50]}")
-        for i, t in enumerate(st.session_state['mem_titles_list']):
-            with st.container(border=True):
-                st.write(f"**{i+1}.** {t}")
-        st.divider()
-        wc = len(st.session_state['mem_script'].split())
-        c1,c2 = st.columns(2)
-        c1.metric("Words", wc)
-        c2.metric("Read Time", f"{round(wc/150,1)} min")
-        st.markdown("#### 🎙️ Voiceover Script")
+        for i,t in enumerate(st.session_state['mem_titles_list']):
+            st.write(f"**{i+1}.** {t}")
         st.markdown(st.session_state['mem_script'])
-        st.download_button("⬇️ Download Script", st.session_state['mem_script'], file_name="voiceover.txt", use_container_width=True)
 
 with tab2:
-    st.header("🖼️ Thumbnail + SEO")
-    if not st.session_state['mem_topic']:
-        st.info("Generate Ideation first")
-    else:
-        if st.button("Generate SEO Pack ✨", use_container_width=True):
-            with st.spinner("Generating SEO..."):
-                try:
-                    seo_prompt = "Topic: " + st.session_state["mem_topic"] + " Niche: " + st.session_state.get("mem_niche","Any") + " Language: " + st.session_state["mem_lang"] + " Return ONLY JSON like {\"thumbnails\": [\"t1\"], \"design\": \"bg\", \"description\": \"desc\", \"tags\": [\"tag\"], \"hashtags\": [\"#tag\"], \"image_prompt\": \"prompt\"}"
-                    data = gemini_json(seo_prompt)
-                    seo_text = "**Thumbnail:**\n" + "\n".join([f"- {t}" for t in data.get("thumbnails",[])]) + f"\n\n**Description:** {data.get('description','')}\n\n**Tags:** {', '.join(data.get('tags',[]))}"
-                    st.session_state['mem_seo']=seo_text
-                    st.session_state['mem_thumb_prompt']=data.get('image_prompt','')
-                    if st.session_state['mem_history']:
-                        st.session_state['mem_history'][-1]['seo']=seo_text
-                        st.session_state['mem_history'][-1]['thumb_prompt']=data.get('image_prompt','')
-                        save_history(st.session_state['mem_history'])
-                except Exception as e:
-                    st.error(f"{e}")
-        if st.session_state['mem_seo']:
-            st.markdown(st.session_state['mem_seo'])
-            if st.session_state['mem_thumb_prompt']:
-                st.code(st.session_state['mem_thumb_prompt'])
+    st.info("Generate Ideation first, then SEO here")
+    if st.session_state['mem_topic'] and st.button("Generate SEO"):
+        try:
+            d = gemini_json(f"Topic:{st.session_state['mem_topic']} Return ONLY JSON like {{\"description\":\"desc\",\"tags\":[\"t\"]}} Generate SEO")
+            st.write(d)
+        except Exception as e:
+            st.error(f"{e}")
 
-with tab3:
-    st.header("✂️ Edit Lab")
-    if not st.session_state['mem_topic']:
-        st.info("Generate Ideation first")
-    else:
-        if st.button("Generate Edit Plan ✂️", type="primary", use_container_width=True):
-            with st.spinner("Creating edit plan..."):
-                try:
-                    edit_prompt = "Topic: " + st.session_state["mem_topic"] + " Niche: " + st.session_state.get("mem_niche","Any") + " Language: " + st.session_state["mem_lang"] + " Duration: " + st.session_state.get("mem_duration","10 min") + " Return ONLY JSON like {\"timeline\": [{\"time\": \"0:00-0:30\", \"visual\": \"scene\", \"stock_search\": \"keywords\"}]}"
-                    data = gemini_json(edit_prompt)
-                    txt = ""
-                    stock_list = []
-                    for seg in data.get("timeline",[]):
-                        txt += f"**{seg.get('time','')}** | {seg.get('visual','')} | {seg.get('stock_search','')}\n\n"
-                        stock_list.append({"time": seg.get('time',''), "search": seg.get('stock_search',''), "visual": seg.get('visual','')})
-                    st.session_state['mem_stock_timeline']=stock_list
-                    st.session_state['mem_edit']=txt
-                    if st.session_state['mem_history']:
-                        st.session_state['mem_history'][-1]['edit']=txt
-                        st.session_state['mem_history'][-1]['stock_timeline']=stock_list
-                        save_history(st.session_state['mem_history'])
-                except Exception as e:
-                    st.error(f"{e}")
-        if st.session_state.get('mem_stock_timeline'):
-            for item in st.session_state['mem_stock_timeline']:
-                with st.container(border=True):
-                    st.markdown(f"**{item['time']}** — {item['visual']}")
-                    q = item['search'].replace(" ", "+")
-                    st.markdown(f"[Pexels](https://www.pexels.com/search/videos/{q}/) | [Pixabay](https://pixabay.com/videos/search/{q}/)")
-
-with tab4:
-    st.header("🚀 Deploy Guide")
-    st.markdown("**3 steps done — your repo has files. Now deploy on share.streamlit.io**")
-
-st.caption("V8.4 WAR — Permanent History + Deploy Ready")
+st.caption("V8.6 AUTO — Auto-detects best model • Biryani test 🍛 • Never 404")
